@@ -1,0 +1,51 @@
+name: Cubical Agda library CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-18.04
+    container:
+      # https://github.com/phadej/docker-ghc
+      image: phadej/ghc:8.6.5-bionic
+
+    steps:
+      # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/development-tools-for-github-actions#add-a-system-path-add-path
+      - name: Set PATH
+        run: |
+          echo "::add-path::$HOME/.cabal/bin"
+
+      - uses: actions/cache@v1
+        id: cache
+        # Due way github-actions cache works,
+        # we hardcode Agda's commit; which may not be a bad thing for robustness
+        with:
+          path: ~/.cabal
+          key: ${{ runner.os }}-4e6ef5bfc9a2a516c103384fbc348d8eb8780137
+
+      - name: Install Agda
+        if: steps.cache-primes.outputs.cache-hit != 'true'
+        run: |
+          cabal v2-update
+          cd /tmp
+          git clone https://github.com/agda/agda --depth=50
+          cd agda
+          git fetch origin 4e6ef5bfc9a2a516c103384fbc348d8eb8780137
+          git checkout 4e6ef5bfc9a2a516c103384fbc348d8eb8780137
+          cabal v2-install agda agda-mode
+
+      - name: Install fix-agda-whitespace
+        if: steps.cache-primes.outputs.cache-hit != 'true'
+        # Agda source is still there
+        run: |
+          cd /tmp/agda/src/fix-agda-whitespace
+          cabal v2-install fix-agda-whitespace
+
+      - uses: actions/checkout@v1
+
+      - name: make check-whitespace
+        # Not using cabal exec, fix-agda-whitespace is globally installed
+        run: fix-agda-whitespace --check
+
+      - name: make check
+        run: make check
